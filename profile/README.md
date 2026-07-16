@@ -1,13 +1,13 @@
 # Merely made:
 
-Mere, your data, surfaced.
+Mere, your data, semantically surfaced.
 
-Serval, a web engine.
+Genet, a data-oriented web engine.
 
-Merecat, a browser.
+Merecat, a graph-shaped browser.
 
-Strophe, a loop recorder.
+Hocket, a collaborative loop recorder.
 
-Woodshed, a rehearsal.
+Woodshed, a musician's rehearsal toolkit.
 
-Isometry, a tabletop.
+Isometry, a voxel-based VTT.
