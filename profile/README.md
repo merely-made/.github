@@ -1,7 +1,9 @@
-# Merely Made
+# merely
 
-Merely Made builds local-first software for navigating knowledge, making
-music, and sharing computation among trusted peers.
+**Software that does what it says. Merely made.**
+
+Merely builds local-first software for navigating knowledge, making music,
+and sharing computation among trusted peers.
 
 [Explore the complete repository family and its relationships →](https://mer3ly.net/repos/)
 
