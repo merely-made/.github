@@ -4,7 +4,7 @@ Mere, your data, semantically surfaced.
 
 Genet, a data-oriented web engine.
 
-Merecat, a graph-shaped browser.
+Turnstone, a graph-shaped browser.
 
 Hocket, a collaborative loop recorder.
 
