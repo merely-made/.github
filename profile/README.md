@@ -3,7 +3,7 @@
 **Software that does what it says. Merely made.**
 
 Merely builds local-first software for navigating knowledge, making music,
-and sharing computation among trusted peers.
+playing together, and sharing computation among trusted peers.
 
 [Explore the complete repository family and its relationships →](https://mer3ly.net/repos/)
 
@@ -24,14 +24,27 @@ and sharing computation among trusted peers.
   for musicians.
 - **[Hocket](https://github.com/merely-made/hocket)** is a turn-based,
   cooperative, peer-to-peer audio looper.
+- **[Cleromancy](https://github.com/merely-made/cleromancy)** is a local-first
+  divination journal with replayable receipts.
+
+## Games
+
+A three-game wing sharing a world substrate, a lineage model, and a trust
+plane:
+
 - **[Isometry](https://github.com/merely-made/isometry)** is a pixel-art
   isometric virtual tabletop with peer-to-peer play.
+- **[Mesocosm](https://github.com/merely-made/mesocosm)** is a first-person
+  game of lineages in an enclosed ecosystem (early).
+- **[Paredros](https://github.com/merely-made/paredros)** is a second-person
+  action RPG among companions who are peers (early).
 
 ## Foundations
 
 [Netrender](https://github.com/merely-made/netrender),
 [Vano](https://github.com/merely-made/vano),
-[Wavicle](https://github.com/merely-made/wavicle), and the focused
+[Wavicle](https://github.com/merely-made/wavicle),
+[Smolweb](https://github.com/merely-made/smolweb), and the focused
 [wgpu interop crates](https://mer3ly.net/repos/#repo-wgpu-graft) support the
 platform and products above.
 
