@@ -1,0 +1,232 @@
+name: wgpu check
+
+# The shared deterministic gate for the wgpu embedding libraries (wgpu-graft,
+# wgpu-scry, wgpu-weld). Everything here runs on GitHub-hosted runners and is
+# reproducible: a red run means the code changed, not that the world did.
+#
+# Two rules keep it that way, and they are the whole point of the file:
+#
+#   1. The toolchain is read from the CALLING repository's rust-toolchain.toml,
+#      never `@stable`. A new stable release must not turn a green repository
+#      red without a commit. A caller without a rust-toolchain.toml fails with
+#      a message naming the file to add, which is a failure a person can act
+#      on in one step.
+#   2. Nothing here touches self-hosted hardware, a display, or a network
+#      service beyond crates.io and git. Hardware and headed batteries stay in
+#      the calling repository on `workflow_dispatch` plus a schedule.
+#
+# Called as:
+#   uses: merely-made/.github/.github/workflows/wgpu-check.yml@main
+# The doubled `.github/.github` is correct: the organization repository is
+# named `.github`, and reusable workflows live under its `.github/workflows/`.
+
+on:
+  workflow_call:
+    inputs:
+      crate:
+        description: Package name to gate, as passed to `cargo -p`.
+        required: true
+        type: string
+      os:
+        description: JSON array of runner labels for the version matrix.
+        required: false
+        type: string
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+      wgpu-versions:
+        description: >-
+          JSON array of the wgpu compatibility features to check, one row each.
+          These are alternative host-compatibility rows: do not collapse them
+          into --all-features, because feature unification then selects several
+          wgpu majors at once and that is not a graph any consumer has.
+        required: false
+        type: string
+        default: '["wgpu-28", "wgpu-29", "wgpu-30"]'
+      lib-args:
+        description: Argument tail shared by every matrix row, before --features.
+        required: false
+        type: string
+        default: --lib --no-default-features
+      run-clippy:
+        description: >-
+          Run `cargo clippy -- -D warnings` instead of `cargo check`. Clippy is
+          the stricter gate; a caller that is not clippy-clean today should
+          leave this false rather than land a red badge it cannot act on.
+        required: false
+        type: boolean
+        default: false
+      run-fmt:
+        description: Run `cargo fmt --all --check` once, on Linux.
+        required: false
+        type: boolean
+        default: true
+      test-row:
+        description: >-
+          Which wgpu row also runs `cargo test`. The tests are version
+          independent, so one row per OS is enough; empty string runs none.
+        required: false
+        type: string
+        default: wgpu-30
+      rustflags:
+        description: RUSTFLAGS for every job. Empty string leaves it unset.
+        required: false
+        type: string
+        default: -D warnings
+      extra-packages:
+        description: >-
+          Additional `-p name` arguments checked once per OS in a separate job
+          (host demos, portable shells). Empty string skips the job.
+        required: false
+        type: string
+        default: ""
+      extra-packages-os:
+        description: JSON array of runners for the extra-packages job.
+        required: false
+        type: string
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+      linux-apt-packages:
+        description: apt packages installed before any Linux job in this workflow.
+        required: false
+        type: string
+        default: ""
+      timeout-minutes:
+        description: Per-job timeout.
+        required: false
+        type: number
+        default: 45
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo's bundled libgit2 intermittently fails to clone large git
+  # dependencies on hosted runners, reporting an invalid SSL certificate or a
+  # missing revision that exists. Shelling out to git is the standing remedy
+  # across all three repositories.
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  # Resolve the pin once so every job below agrees, and so the version is
+  # printed in one obvious place when someone asks what CI actually ran.
+  toolchain:
+    name: Resolve pinned toolchain
+    runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.pin.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-toolchain.toml
+        id: pin
+        run: |
+          if [ ! -f rust-toolchain.toml ]; then
+            echo "::error file=rust-toolchain.toml::This repository calls the shared wgpu gate but has no rust-toolchain.toml. Add one pinning [toolchain] channel to the version this repository builds with."
+            exit 1
+          fi
+          channel=$(sed -n 's/^[[:space:]]*channel[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' rust-toolchain.toml | head -n 1)
+          if [ -z "$channel" ]; then
+            echo "::error file=rust-toolchain.toml::rust-toolchain.toml has no [toolchain] channel = \"...\" line."
+            exit 1
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "pinned toolchain: $channel"
+
+  fmt:
+    name: rustfmt
+    needs: toolchain
+    if: inputs.run-fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.toolchain.outputs.channel }}
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  check:
+    name: ${{ matrix.os }} / ${{ matrix.wgpu }}
+    needs: toolchain
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+        wgpu: ${{ fromJSON(inputs.wgpu-versions) }}
+    env:
+      RUSTFLAGS: ${{ inputs.rustflags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Allow long paths on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.toolchain.outputs.channel }}
+          components: ${{ inputs.run-clippy && 'clippy' || '' }}
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends ${{ inputs.linux-apt-packages }}
+
+      - name: Record what is being gated
+        run: |
+          cargo --version
+          rustc --version
+
+      - name: cargo clippy (${{ matrix.wgpu }})
+        if: inputs.run-clippy
+        run: >-
+          cargo clippy --locked -p ${{ inputs.crate }} ${{ inputs.lib-args }}
+          --features ${{ matrix.wgpu }} -- -D warnings
+
+      - name: cargo check (${{ matrix.wgpu }})
+        if: ${{ !inputs.run-clippy }}
+        run: >-
+          cargo check --locked -p ${{ inputs.crate }} ${{ inputs.lib-args }}
+          --features ${{ matrix.wgpu }}
+
+      # The unit tests do not depend on which wgpu major is selected, so they
+      # run on one row per OS rather than being tripled.
+      - name: cargo test (${{ inputs.test-row }})
+        if: inputs.test-row != '' && matrix.wgpu == inputs.test-row
+        run: >-
+          cargo test --locked -p ${{ inputs.crate }} --no-default-features
+          --features ${{ matrix.wgpu }}
+
+  extra:
+    name: ${{ matrix.os }} / extra packages
+    needs: toolchain
+    if: inputs.extra-packages != ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.extra-packages-os) }}
+    env:
+      RUSTFLAGS: ${{ inputs.rustflags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Allow long paths on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.toolchain.outputs.channel }}
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends ${{ inputs.linux-apt-packages }}
+
+      - name: cargo check extra packages
+        run: cargo check --locked ${{ inputs.extra-packages }}

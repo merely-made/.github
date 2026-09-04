@@ -1,0 +1,181 @@
+name: wgpu MSRV
+
+# The shared minimum-supported-Rust-version gate for the wgpu embedding
+# libraries. This is a RELEASE-TIME gate, not a per-push one.
+#
+# The reason it is separated from wgpu-check.yml: MSRV is a promise made to
+# consumers at publication, and it can only be broken by a dependency bump or
+# by new syntax, both of which are visible at the moment of release. Running it
+# on every push spends a full three-OS matrix to re-answer a question that has
+# not changed, and its `-D warnings` lane goes red whenever an old compiler
+# lints something a current one does not — a failure with no action behind it
+# on the day it appears.
+#
+# Callers should therefore trigger this on `push: tags`, `release`, and
+# `workflow_dispatch`, and NOT on ordinary pushes to main.
+#
+# Called as:
+#   uses: merely-made/.github/.github/workflows/wgpu-msrv.yml@main
+
+on:
+  workflow_call:
+    inputs:
+      crate:
+        description: Package name to gate, as passed to `cargo -p`.
+        required: true
+        type: string
+      toolchain:
+        description: The MSRV itself, as a rustup toolchain name.
+        required: false
+        type: string
+        default: 1.92.0
+      os:
+        description: JSON array of runner labels for the version matrix.
+        required: false
+        type: string
+        default: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+      wgpu-versions:
+        description: JSON array of wgpu compatibility features, one row each.
+        required: false
+        type: string
+        default: '["wgpu-28", "wgpu-29", "wgpu-30"]'
+      run-library:
+        description: >-
+          Run the per-wgpu library matrix. A repository whose MSRV contract is
+          a single whole-graph check rather than a set of compatibility rows
+          sets this false and states that check in `extra-check` instead.
+        required: false
+        type: boolean
+        default: true
+      lib-args:
+        description: Argument tail shared by every matrix row, before --features.
+        required: false
+        type: string
+        default: --lib --no-default-features
+      test-row:
+        description: >-
+          Which wgpu row also runs `cargo test` at the MSRV. Empty runs none.
+        required: false
+        type: string
+        default: ""
+      rustflags:
+        description: RUSTFLAGS for every job. Empty string leaves it unset.
+        required: false
+        type: string
+        default: ""
+      extra-check:
+        description: >-
+          A complete `cargo check` argument tail run once per OS at the MSRV,
+          for a graph the matrix rows do not cover (for example the default
+          feature set including an optional native runtime). Empty skips it.
+        required: false
+        type: string
+        default: ""
+      extra-check-name:
+        description: Human-readable name for the extra-check job.
+        required: false
+        type: string
+        default: extra graph
+      linux-apt-packages:
+        description: apt packages installed before any Linux job in this workflow.
+        required: false
+        type: string
+        default: ""
+      timeout-minutes:
+        description: Per-job timeout.
+        required: false
+        type: number
+        default: 45
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
+jobs:
+  library:
+    name: Rust ${{ inputs.toolchain }} / ${{ matrix.os }} / ${{ matrix.wgpu }}
+    if: inputs.run-library
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+        wgpu: ${{ fromJSON(inputs.wgpu-versions) }}
+    env:
+      RUSTFLAGS: ${{ inputs.rustflags }}
+      # dtolnay/rust-toolchain exports this too; naming it here keeps the
+      # override of the repository's rust-toolchain.toml explicit, because
+      # silently building at the wrong version is exactly the bug this gate
+      # exists to catch.
+      RUSTUP_TOOLCHAIN: ${{ inputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Allow long paths on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends ${{ inputs.linux-apt-packages }}
+
+      - name: Confirm the MSRV toolchain is the one in use
+        run: |
+          rustc --version
+          rustc --version | grep -q "${{ inputs.toolchain }}" || {
+            echo "::error::Expected rustc ${{ inputs.toolchain }}; rust-toolchain.toml appears to have won."
+            exit 1
+          }
+
+      - name: Check the publishable library row
+        run: >-
+          cargo check --locked -p ${{ inputs.crate }} ${{ inputs.lib-args }}
+          --features ${{ matrix.wgpu }}
+
+      - name: Test the MSRV anchor row
+        if: inputs.test-row != '' && matrix.wgpu == inputs.test-row
+        run: >-
+          cargo test --locked -p ${{ inputs.crate }} --no-default-features
+          --features ${{ matrix.wgpu }}
+
+  extra:
+    name: Rust ${{ inputs.toolchain }} / ${{ matrix.os }} / ${{ inputs.extra-check-name }}
+    if: inputs.extra-check != ''
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+    env:
+      RUSTFLAGS: ${{ inputs.rustflags }}
+      RUSTUP_TOOLCHAIN: ${{ inputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Allow long paths on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ inputs.toolchain }}
+
+      - name: Install Linux system packages
+        if: runner.os == 'Linux' && inputs.linux-apt-packages != ''
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends ${{ inputs.linux-apt-packages }}
+
+      - name: cargo check ${{ inputs.extra-check-name }}
+        run: cargo check --locked ${{ inputs.extra-check }}
