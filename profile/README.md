@@ -72,4 +72,4 @@ platform and products above.
 [mer3ly.net](https://mer3ly.net/) ·
 [repository map](https://mer3ly.net/repos/) ·
 [community radio](https://mer3ly.net/radio) ·
-[markik@mer3ly.net](mailto:markik@mer3ly.net)
+[mark@merelyllc.com](mailto:mark@merelyllc.com)
