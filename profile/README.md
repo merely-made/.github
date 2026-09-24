@@ -57,8 +57,10 @@ Some samples:
 - **[Cleromancy](https://github.com/merely-made/cleromancy)** is a local-first
   divination journal with replayable receipts.
 
-- **[Isometry](https://github.com/merely-made/isometry)** is a pixel-art
-  isometric virtual tabletop with peer-to-peer play.
+- **[Isocosm](https://github.com/merely-made/isocosm)** is one simulated
+  world played three ways: a pixel-art virtual tabletop with peer-to-peer
+  play (Isocosm: VTT), an ecological roguelike of lineages (Isocosm:
+  Mesocosm), and a second-person action RPG (Isocosm: Eponym).
 
 ## Foundations
 
