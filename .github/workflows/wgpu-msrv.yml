@@ -28,7 +28,7 @@ on:
         description: The MSRV itself, as a rustup toolchain name.
         required: false
         type: string
-        default: 1.92.0
+        default: 1.97.1
       os:
         description: JSON array of runner labels for the version matrix.
         required: false
