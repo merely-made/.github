@@ -47,8 +47,9 @@ Some samples:
   addressable content, spatial interfaces, local memory, and trusted exchange.
 - **[Genet](https://github.com/merely-made/genet)** is an embeddable Rust web
   engine with static, interactive, scripted, and full-web profiles.
-- **[Retinue](https://github.com/merely-made/retinue)** is a peer-to-peer and
-  radio stack for identity, links, resources, and reliable streams.
+- **[Murm](https://github.com/merely-made/murm)** brings together transport
+  and device management implementations: native peer carriers, conversations,
+  radio protocols, and operator applications.
 
 - **[Turnstone](https://github.com/merely-made/turnstone)** is a graph-shaped
   browser for relating, curating, and cooperatively browsing the web.
